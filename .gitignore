@@ -181,7 +181,7 @@ dump.rdb
 appendonly.aof
 
 # PM2 files
-ecosystem.config.js
+# ecosystem.config.js
 .pm2/
 
 # Docker files (keep main ones, ignore volumes)
