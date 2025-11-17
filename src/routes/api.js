@@ -131,13 +131,20 @@ async function handleMessagesRequest(req, res) {
       const requestedModel = req.body.model
       let accountId
       let accountType
+      let fallbackMode = false
       try {
         const selection = await unifiedClaudeScheduler.selectAccountForApiKey(
           req.apiKey,
           sessionHash,
           requestedModel
         )
-        ;({ accountId, accountType } = selection)
+        ;({ accountId, accountType, fallbackMode = false } = selection)
+
+        // 如果使用降级模式，添加响应头标识
+        if (fallbackMode) {
+          res.setHeader('X-Group-Rotation-Fallback', 'true')
+          logger.info('🔻 Response tagged with fallback mode header')
+        }
       } catch (error) {
         if (error.code === 'CLAUDE_DEDICATED_RATE_LIMITED') {
           const limitMessage = claudeRelayService._buildStandardRateLimitMessage(
@@ -493,13 +500,20 @@ async function handleMessagesRequest(req, res) {
       const requestedModel = req.body.model
       let accountId
       let accountType
+      let fallbackMode = false
       try {
         const selection = await unifiedClaudeScheduler.selectAccountForApiKey(
           req.apiKey,
           sessionHash,
           requestedModel
         )
-        ;({ accountId, accountType } = selection)
+        ;({ accountId, accountType, fallbackMode = false } = selection)
+
+        // 如果使用降级模式，添加响应头标识
+        if (fallbackMode) {
+          res.setHeader('X-Group-Rotation-Fallback', 'true')
+          logger.info('🔻 Response tagged with fallback mode header (non-stream)')
+        }
       } catch (error) {
         if (error.code === 'CLAUDE_DEDICATED_RATE_LIMITED') {
           const limitMessage = claudeRelayService._buildStandardRateLimitMessage(

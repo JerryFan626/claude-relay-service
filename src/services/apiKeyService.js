@@ -97,7 +97,8 @@ class ApiKeyService {
       activationDays = 0, // 新增：激活后有效天数（0表示不使用此功能）
       activationUnit = 'days', // 新增：激活时间单位 'hours' 或 'days'
       expirationMode = 'fixed', // 新增：过期模式 'fixed'(固定时间) 或 'activation'(首次使用后激活)
-      icon = '' // 新增：图标（base64编码）
+      icon = '', // 新增：图标（base64编码）
+      groupRotation = null // 新增：分组轮转配置
     } = options
 
     // 生成简单的API Key (64字符十六进制)
@@ -143,7 +144,8 @@ class ApiKeyService {
       createdBy: options.createdBy || 'admin',
       userId: options.userId || '',
       userUsername: options.userUsername || '',
-      icon: icon || '' // 新增：图标（base64编码）
+      icon: icon || '', // 新增：图标（base64编码）
+      groupRotation: groupRotation ? JSON.stringify(groupRotation) : '' // 新增：分组轮转配置
     }
 
     // 保存API Key数据并建立哈希映射
@@ -302,6 +304,14 @@ class ApiKeyService {
         tags = []
       }
 
+      // 解析分组轮转配置
+      let groupRotation = null
+      try {
+        groupRotation = keyData.groupRotation ? JSON.parse(keyData.groupRotation) : null
+      } catch (e) {
+        groupRotation = null
+      }
+
       return {
         valid: true,
         keyData: {
@@ -334,6 +344,7 @@ class ApiKeyService {
           totalCost,
           weeklyOpusCost: (await redis.getWeeklyOpusCost(keyData.id)) || 0,
           tags,
+          groupRotation, // 新增：分组轮转配置
           usage
         }
       }
@@ -577,6 +588,12 @@ class ApiKeyService {
           key.tags = key.tags ? JSON.parse(key.tags) : []
         } catch (e) {
           key.tags = []
+        }
+        // 解析分组轮转配置
+        try {
+          key.groupRotation = key.groupRotation ? JSON.parse(key.groupRotation) : null
+        } catch (e) {
+          key.groupRotation = null
         }
         // 不暴露已弃用字段
         if (Object.prototype.hasOwnProperty.call(key, 'ccrAccountId')) {
@@ -1174,6 +1191,45 @@ class ApiKeyService {
           logger.debug(
             '⚠️ No accountId provided for usage recording, skipping account-level statistics'
           )
+        }
+
+        // 🔄 记录分组轮转使用并检查是否需要轮转
+        if (keyData.groupRotation) {
+          try {
+            const groupRotation = JSON.parse(keyData.groupRotation)
+            if (groupRotation && groupRotation.enabled && groupRotation.groups) {
+              const currentGroup = groupRotation.groups[groupRotation.currentIndex || 0]
+              if (currentGroup && currentGroup.groupId) {
+                const groupRotationService = require('./groupRotationService')
+
+                const { shouldRotate, reason } =
+                  await groupRotationService.trackUsageAndCheckRotation(currentGroup.groupId, {
+                    cost: costInfo.totalCost || 0,
+                    tokens: totalTokens
+                  })
+
+                if (shouldRotate) {
+                  logger.info(`🔄 分组 ${currentGroup.groupId} 配额耗尽 (${reason})，准备轮转`)
+
+                  // 异步轮转（不阻塞响应）
+                  setImmediate(async () => {
+                    try {
+                      await groupRotationService.rotateToNextGroup(keyId, {
+                        id: keyId,
+                        name: keyData.name || keyId,
+                        groupRotation
+                      })
+                    } catch (rotationError) {
+                      logger.error(`❌ 分组轮转失败 for API Key ${keyId}:`, rotationError)
+                    }
+                  })
+                }
+              }
+            }
+          } catch (err) {
+            logger.error(`❌ 处理分组轮转使用记录失败 for API Key ${keyId}:`, err)
+            // 不影响主流程，只记录错误
+          }
         }
       }
 

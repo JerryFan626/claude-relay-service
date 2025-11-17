@@ -3,6 +3,7 @@ const claudeConsoleAccountService = require('./claudeConsoleAccountService')
 const bedrockAccountService = require('./bedrockAccountService')
 const ccrAccountService = require('./ccrAccountService')
 const accountGroupService = require('./accountGroupService')
+const groupRotationService = require('./groupRotationService')
 const redis = require('../models/redis')
 const logger = require('../utils/logger')
 const { parseVendorPrefixedModel } = require('../utils/modelHelper')
@@ -158,6 +159,49 @@ class UnifiedClaudeScheduler {
         logger.info(`🎯 CCR vendor prefix detected, routing to CCR accounts only`)
         return await this._selectCcrAccount(apiKeyData, sessionHash, effectiveModel)
       }
+
+      // 🔄 检查是否启用分组轮转
+      let useFallbackMode = false // 标记是否使用降级模式
+
+      if (apiKeyData.groupRotation && apiKeyData.groupRotation.enabled) {
+        logger.info(
+          `🔄 API key ${apiKeyData.name} has group rotation enabled, using rotation service`
+        )
+
+        try {
+          const currentGroup = await groupRotationService.getCurrentGroup(apiKeyData)
+
+          if (!currentGroup) {
+            // 所有分组都不可用 - 触发降级
+            throw new Error('ALL_GROUPS_EXHAUSTED')
+          }
+
+          logger.info(
+            `🔄 Using group ${currentGroup.groupId} from rotation (platform: ${currentGroup.platform})`
+          )
+
+          // 从当前分组中选择账户
+          return await this.selectAccountFromGroup(
+            currentGroup.groupId,
+            sessionHash,
+            effectiveModel,
+            vendor === 'ccr'
+          )
+        } catch (error) {
+          if (error.message === 'ALL_GROUPS_EXHAUSTED' || error.code === 'ALL_GROUPS_EXHAUSTED') {
+            // 🔻 降级模式：所有分组冷却时，忽略分组限制，使用全账户池
+            logger.warn(
+              `⚠️ All account groups are in cooldown for API key ${apiKeyData.name}, falling back to unrestricted account pool`
+            )
+            useFallbackMode = true
+            // 继续执行下面的账户选择逻辑（不会从分组中选择）
+          } else {
+            // 其他错误直接抛出
+            throw error
+          }
+        }
+      }
+
       // 如果API Key绑定了专属账户或分组，优先使用
       if (apiKeyData.claudeAccountId) {
         // 检查是否是分组
@@ -332,12 +376,13 @@ class UnifiedClaudeScheduler {
       }
 
       logger.info(
-        `🎯 Selected account: ${selectedAccount.name} (${selectedAccount.accountId}, ${selectedAccount.accountType}) with priority ${selectedAccount.priority} for API key ${apiKeyData.name}`
+        `🎯 Selected account: ${selectedAccount.name} (${selectedAccount.accountId}, ${selectedAccount.accountType}) with priority ${selectedAccount.priority} for API key ${apiKeyData.name}${useFallbackMode ? ' (fallback mode)' : ''}`
       )
 
       return {
         accountId: selectedAccount.accountId,
-        accountType: selectedAccount.accountType
+        accountType: selectedAccount.accountType,
+        fallbackMode: useFallbackMode // 标记是否为降级模式
       }
     } catch (error) {
       logger.error('❌ Failed to select account for API key:', error)

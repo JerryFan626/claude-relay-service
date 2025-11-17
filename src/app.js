@@ -565,6 +565,10 @@ class Application {
       `🚨 Rate limit cleanup service started (checking every ${cleanupIntervalMinutes} minutes)`
     )
 
+    // 注意：分组轮转的冷却期和使用统计会自动过期，无需周重置服务
+    // 冷却期结束后，isGroupInCooldown() 会自动清除使用统计
+    logger.info('🔄 Group rotation: cooldown and usage stats auto-expire (no weekly reset needed)')
+
     // 🔢 启动并发计数自动清理任务（Phase 1 修复：解决并发泄漏问题）
     // 每分钟主动清理所有过期的并发项，不依赖请求触发
     setInterval(async () => {
@@ -655,6 +659,8 @@ class Application {
           } catch (error) {
             logger.error('❌ Error stopping rate limit cleanup service:', error)
           }
+
+          // 注意：周重置服务已移除，冷却期自动过期
 
           // 🔢 清理所有并发计数（Phase 1 修复：防止重启泄漏）
           try {

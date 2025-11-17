@@ -56,7 +56,8 @@ const tabs = computed(() => {
   const baseTabs = [
     { key: 'dashboard', name: '仪表板', shortName: '仪表板', icon: 'fas fa-tachometer-alt' },
     { key: 'apiKeys', name: 'API Keys', shortName: 'API', icon: 'fas fa-key' },
-    { key: 'accounts', name: '账户管理', shortName: '账户', icon: 'fas fa-user-circle' }
+    { key: 'accounts', name: '账户管理', shortName: '账户', icon: 'fas fa-user-circle' },
+    { key: 'accountGroups', name: '账户组', shortName: '分组', icon: 'fas fa-layer-group' }
   ]
 
   // 只有在 LDAP 启用时才显示用户管理

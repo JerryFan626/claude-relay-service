@@ -2549,6 +2549,20 @@ const getBoundAccountName = (accountId) => {
 
 // 获取Claude绑定信息
 const getClaudeBindingInfo = (key) => {
+  // 优先检查分组轮转配置
+  if (
+    key.groupRotation &&
+    key.groupRotation.enabled &&
+    key.groupRotation.groups &&
+    key.groupRotation.groups.length > 0
+  ) {
+    const currentIndex = key.groupRotation.currentIndex || 0
+    const currentGroup = key.groupRotation.groups[currentIndex]
+    if (currentGroup) {
+      return `🔄 ${currentGroup.name} (轮转中)`
+    }
+  }
+
   if (key.claudeAccountId) {
     const info = getBoundAccountName(key.claudeAccountId)
     if (key.claudeAccountId.startsWith('group:')) {

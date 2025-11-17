@@ -15,11 +15,19 @@ class AccountGroupService {
    * @param {string} groupData.name - 分组名称
    * @param {string} groupData.platform - 平台类型 (claude/gemini/openai)
    * @param {string} groupData.description - 分组描述
+   * @param {Object} groupData.weeklyQuota - 每周配额（可选）
+   * @param {Object} groupData.rotationConfig - 轮转配置（可选）
    * @returns {Object} 创建的分组
    */
   async createGroup(groupData) {
     try {
-      const { name, platform, description = '' } = groupData
+      const {
+        name,
+        platform,
+        description = '',
+        weeklyQuota = null,
+        rotationConfig = null
+      } = groupData
 
       // 验证必填字段
       if (!name || !platform) {
@@ -44,6 +52,16 @@ class AccountGroupService {
         updatedAt: now
       }
 
+      // 添加轮转相关配置（如果提供）
+      if (weeklyQuota) {
+        group.rotationQuotaMaxCost = String(weeklyQuota.maxCost || 0)
+      }
+
+      if (rotationConfig) {
+        group.rotationCooldownHours = String(rotationConfig.cooldownHours || 12) // 默认12小时
+        group.rotationMaxHours = String(rotationConfig.maxHours || 5) // 默认5小时（单次使用时长限制）
+      }
+
       // 保存分组数据
       await client.hmset(`${this.GROUP_PREFIX}${groupId}`, group)
 
@@ -52,7 +70,7 @@ class AccountGroupService {
 
       logger.success(`✅ 创建账户分组成功: ${name} (${platform})`)
 
-      return group
+      return this._formatGroupData(group, 0) // 新建分组成员数为0
     } catch (error) {
       logger.error('❌ 创建账户分组失败:', error)
       throw error
@@ -167,10 +185,7 @@ class AccountGroupService {
       // 获取成员数量
       const memberCount = await client.scard(`${this.GROUP_MEMBERS_PREFIX}${groupId}`)
 
-      return {
-        ...groupData,
-        memberCount: memberCount || 0
-      }
+      return this._formatGroupData(groupData, memberCount)
     } catch (error) {
       logger.error('❌ 获取分组详情失败:', error)
       throw error
@@ -424,6 +439,37 @@ class AccountGroupService {
       logger.error('❌ 从所有分组移除账户失败:', error)
       throw error
     }
+  }
+
+  /**
+   * 格式化分组数据，转换字段类型并添加结构化对象
+   * @param {Object} groupData - 原始分组数据
+   * @param {number} memberCount - 成员数量
+   * @returns {Object} 格式化后的分组数据
+   * @private
+   */
+  _formatGroupData(groupData, memberCount) {
+    const formatted = {
+      ...groupData,
+      memberCount: memberCount || 0
+    }
+
+    // 解析轮转配额
+    if (groupData.rotationQuotaMaxCost !== undefined) {
+      formatted.rotationQuota = {
+        maxCost: parseFloat(groupData.rotationQuotaMaxCost || 0)
+      }
+    }
+
+    // 解析轮转配置
+    if (groupData.rotationCooldownHours !== undefined) {
+      formatted.rotationConfig = {
+        cooldownHours: parseFloat(groupData.rotationCooldownHours || 12),
+        maxHours: parseFloat(groupData.rotationMaxHours || 5)
+      }
+    }
+
+    return formatted
   }
 }
 

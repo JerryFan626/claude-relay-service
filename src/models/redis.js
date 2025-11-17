@@ -2021,6 +2021,164 @@ redisClient.releaseAccountLock = async function (lockKey, lockValue) {
   }
 }
 
+// ============================================
+// 分组轮转相关方法
+// ============================================
+
+/**
+ * 累加分组的轮次使用统计
+ * @param {string} groupId - 分组ID
+ * @param {Object} usage - 使用数据
+ * @param {number} usage.cost - 费用（美元）
+ * @param {number} usage.tokens - Tokens数
+ */
+redisClient.incrementGroupRotationUsage = async function (groupId, usage) {
+  const key = `group_rotation_usage:${groupId}`
+  const client = this.getClientSafe()
+
+  const pipeline = client.pipeline()
+
+  // 累加统计
+  pipeline.hincrbyfloat(key, 'totalCost', usage.cost || 0)
+  pipeline.hincrby(key, 'totalTokens', usage.tokens || 0)
+
+  // 如果是首次使用，设置startTime
+  const exists = await client.hexists(key, 'startTime')
+  if (!exists) {
+    pipeline.hset(key, 'startTime', new Date().toISOString())
+    pipeline.hset(key, 'status', 'active')
+  }
+
+  // 不设置过期时间，由冷却期结束时手动清除
+  await pipeline.exec()
+}
+
+/**
+ * 获取分组的轮次使用统计
+ * @param {string} groupId - 分组ID
+ * @returns {Object} 使用统计数据
+ */
+redisClient.getGroupRotationUsage = async function (groupId) {
+  const key = `group_rotation_usage:${groupId}`
+  const client = this.getClientSafe()
+
+  const data = await client.hgetall(key)
+
+  if (!data || Object.keys(data).length === 0) {
+    return {
+      totalCost: 0,
+      totalTokens: 0,
+      startTime: null,
+      status: 'active',
+      exhaustedAt: null,
+      exhaustedReason: null
+    }
+  }
+
+  return {
+    totalCost: parseFloat(data.totalCost || 0),
+    totalTokens: parseInt(data.totalTokens || 0),
+    startTime: data.startTime || null,
+    status: data.status || 'active',
+    exhaustedAt: data.exhaustedAt || null,
+    exhaustedReason: data.exhaustedReason || null
+  }
+}
+
+/**
+ * 标记分组为已耗尽状态
+ * @param {string} groupId - 分组ID
+ * @param {string} reason - 耗尽原因 ('cost_exhausted')
+ */
+redisClient.markGroupExhausted = async function (groupId, reason) {
+  const key = `group_rotation_usage:${groupId}`
+  const client = this.getClientSafe()
+
+  await client.hset(key, 'status', 'exhausted')
+  await client.hset(key, 'exhaustedAt', new Date().toISOString())
+  await client.hset(key, 'exhaustedReason', reason)
+}
+
+/**
+ * 设置分组冷却状态（冷却期结束后会自动清除使用统计）
+ * @param {string} groupId - 分组ID
+ * @param {number} cooldownHours - 冷却时长（小时）
+ */
+redisClient.setGroupCooldown = async function (groupId, cooldownHours) {
+  const key = `group_cooldown:${groupId}`
+  const client = this.getClientSafe()
+
+  const ttlSeconds = Math.ceil(cooldownHours * 3600) // 确保是整数
+  const cooldownUntil = new Date(Date.now() + ttlSeconds * 1000)
+
+  if (ttlSeconds > 0) {
+    await client.setex(key, ttlSeconds, cooldownUntil.toISOString())
+  }
+}
+
+/**
+ * 检查分组是否在冷却期，如果冷却期已过，自动清除使用统计
+ * @param {string} groupId - 分组ID
+ * @returns {boolean} 是否在冷却期
+ */
+redisClient.isGroupInCooldown = async function (groupId) {
+  const key = `group_cooldown:${groupId}`
+  const client = this.getClientSafe()
+
+  const exists = await client.exists(key)
+
+  // 如果不在冷却期，检查并清除可能残留的使用统计
+  if (exists === 0) {
+    const usageKey = `group_rotation_usage:${groupId}`
+    const usageData = await client.hgetall(usageKey)
+
+    // 只有当状态是 exhausted 时才清除（表示这是冷却期结束后的残留数据）
+    // 如果是 active 状态，说明正在使用中，不应该清除
+    if (usageData && usageData.status === 'exhausted') {
+      // 冷却期已过，清除使用统计让分组可以重新使用
+      await client.del(usageKey)
+    }
+  }
+
+  return exists === 1
+}
+
+/**
+ * 获取分组冷却结束时间
+ * @param {string} groupId - 分组ID
+ * @returns {string|null} 冷却结束时间（ISO字符串）
+ */
+redisClient.getGroupCooldownUntil = async function (groupId) {
+  const key = `group_cooldown:${groupId}`
+  const client = this.getClientSafe()
+
+  return await client.get(key)
+}
+
+/**
+ * 清除分组冷却状态和使用统计（用于手动重置）
+ * @param {string} groupId - 分组ID
+ */
+redisClient.clearGroupCooldown = async function (groupId) {
+  const client = this.getClientSafe()
+
+  // 同时清除冷却状态和使用统计
+  await client.del(`group_cooldown:${groupId}`)
+  await client.del(`group_rotation_usage:${groupId}`)
+}
+
+/**
+ * 重置分组的轮次使用统计
+ * @param {string} groupId - 分组ID
+ */
+redisClient.resetGroupRotationUsage = async function (groupId) {
+  const key = `group_rotation_usage:${groupId}`
+  const client = this.getClientSafe()
+
+  // 直接删除key，让统计从头开始
+  await client.del(key)
+}
+
 // 导出时区辅助函数
 redisClient.getDateInTimezone = getDateInTimezone
 redisClient.getDateStringInTimezone = getDateStringInTimezone
