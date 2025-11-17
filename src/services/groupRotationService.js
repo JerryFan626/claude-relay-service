@@ -309,6 +309,82 @@ class GroupRotationService {
       return { success: false, message: error.message }
     }
   }
+
+  /**
+   * 获取API Key的当前组和下一个组信息
+   * @param {string} apiKeyId - API Key ID
+   * @returns {Promise<{current: Object, next: Object, allGroups: Array}>}
+   */
+  async getApiKeyRotationStatus(apiKeyId) {
+    try {
+      const client = redis.getClientSafe()
+      const keyData = await client.hgetall(`api_key:${apiKeyId}`)
+
+      if (!keyData) {
+        throw new Error('API Key not found')
+      }
+
+      const groupRotation = keyData.groupRotation ? JSON.parse(keyData.groupRotation) : null
+
+      if (!groupRotation || !groupRotation.enabled) {
+        return {
+          enabled: false,
+          message: '未启用分组轮转'
+        }
+      }
+
+      const totalGroups = groupRotation.groups.length
+      const currentIndex = groupRotation.currentIndex || 0
+      const nextIndex = (currentIndex + 1) % totalGroups
+
+      const currentGroupConfig = groupRotation.groups[currentIndex]
+      const nextGroupConfig = groupRotation.groups[nextIndex]
+
+      // 获取当前组的详细状态
+      const currentGroupStatus = currentGroupConfig
+        ? await this.getGroupStatus(currentGroupConfig.groupId)
+        : null
+
+      // 获取下一个组的详细状态
+      const nextGroupStatus = nextGroupConfig
+        ? await this.getGroupStatus(nextGroupConfig.groupId)
+        : null
+
+      // 获取所有组的状态
+      const allGroupsStatus = await Promise.all(
+        groupRotation.groups.map(async (groupConfig, index) => {
+          const status = await this.getGroupStatus(groupConfig.groupId)
+          return {
+            index,
+            isCurrent: index === currentIndex,
+            isNext: index === nextIndex,
+            ...status
+          }
+        })
+      )
+
+      return {
+        enabled: true,
+        totalGroups,
+        currentIndex,
+        nextIndex,
+        current: {
+          index: currentIndex,
+          config: currentGroupConfig,
+          status: currentGroupStatus
+        },
+        next: {
+          index: nextIndex,
+          config: nextGroupConfig,
+          status: nextGroupStatus
+        },
+        allGroups: allGroupsStatus
+      }
+    } catch (error) {
+      logger.error(`获取 API Key ${apiKeyId} 轮转状态失败:`, error)
+      throw error
+    }
+  }
 }
 
 module.exports = new GroupRotationService()

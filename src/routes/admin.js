@@ -10,6 +10,7 @@ const openaiAccountService = require('../services/openaiAccountService')
 const openaiResponsesAccountService = require('../services/openaiResponsesAccountService')
 const azureOpenaiAccountService = require('../services/azureOpenaiAccountService')
 const accountGroupService = require('../services/accountGroupService')
+const groupRotationService = require('../services/groupRotationService')
 const redis = require('../models/redis')
 const { authenticateAdmin } = require('../middleware/auth')
 const logger = require('../utils/logger')
@@ -1865,6 +1866,54 @@ router.get('/account-groups/:groupId/members', authenticateAdmin, async (req, re
     return res.json({ success: true, data: members })
   } catch (error) {
     logger.error('❌ Failed to get group members:', error)
+    return res.status(500).json({ error: error.message })
+  }
+})
+
+// 🔄 分组轮转管理
+
+// 获取API Key的轮转状态（当前组、下一个组等）
+router.get('/api-keys/:keyId/rotation-status', authenticateAdmin, async (req, res) => {
+  try {
+    const { keyId } = req.params
+    const rotationStatus = await groupRotationService.getApiKeyRotationStatus(keyId)
+    return res.json({ success: true, data: rotationStatus })
+  } catch (error) {
+    logger.error('❌ Failed to get API key rotation status:', error)
+    return res.status(500).json({ error: error.message })
+  }
+})
+
+// 获取分组的详细状态（使用情况、冷却状态等）
+router.get('/account-groups/:groupId/status', authenticateAdmin, async (req, res) => {
+  try {
+    const { groupId } = req.params
+    const status = await groupRotationService.getGroupStatus(groupId)
+
+    if (status.error) {
+      return res.status(404).json({ error: status.error, message: status.message })
+    }
+
+    return res.json({ success: true, data: status })
+  } catch (error) {
+    logger.error('❌ Failed to get group status:', error)
+    return res.status(500).json({ error: error.message })
+  }
+})
+
+// 手动重置分组（清除冷却状态和使用统计）
+router.post('/account-groups/:groupId/reset', authenticateAdmin, async (req, res) => {
+  try {
+    const { groupId } = req.params
+    const result = await groupRotationService.manualResetGroup(groupId)
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.message })
+    }
+
+    return res.json({ success: true, message: result.message })
+  } catch (error) {
+    logger.error('❌ Failed to reset group:', error)
     return res.status(500).json({ error: error.message })
   }
 })

@@ -227,6 +227,199 @@
               </div>
             </div>
           </div>
+
+          <!-- 分组轮转状态 -->
+          <div v-if="rotationStatus?.enabled" class="mb-6">
+            <h4
+              class="mb-3 flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300"
+            >
+              <i class="fas fa-sync-alt mr-2 text-indigo-500" />
+              分组轮转状态
+            </h4>
+
+            <!-- 加载中 -->
+            <div v-if="loadingRotationStatus" class="rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+              <div class="flex items-center justify-center">
+                <i class="fas fa-spinner fa-spin mr-2 text-blue-500" />
+                <span class="text-sm text-gray-600 dark:text-gray-400">加载中...</span>
+              </div>
+            </div>
+
+            <!-- 轮转状态内容 -->
+            <div v-else class="space-y-4">
+              <!-- 概览信息 -->
+              <div class="rounded-lg bg-gradient-to-br from-indigo-50 to-blue-50 p-4 dark:from-indigo-900/20 dark:to-blue-900/20">
+                <div class="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <div class="text-xs text-gray-600 dark:text-gray-400">总分组数</div>
+                    <div class="text-xl font-bold text-gray-900 dark:text-gray-100">
+                      {{ rotationStatus.totalGroups }}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-gray-600 dark:text-gray-400">当前索引</div>
+                    <div class="text-xl font-bold text-blue-600 dark:text-blue-400">
+                      {{ rotationStatus.currentIndex }}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-gray-600 dark:text-gray-400">下一个索引</div>
+                    <div class="text-xl font-bold text-purple-600 dark:text-purple-400">
+                      {{ rotationStatus.nextIndex }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 当前分组 -->
+              <div class="rounded-lg border-2 border-blue-300 bg-blue-50/50 p-4 dark:border-blue-600 dark:bg-blue-900/20">
+                <div class="mb-2 flex items-center justify-between">
+                  <div class="flex items-center">
+                    <i class="fas fa-bullseye mr-2 text-blue-500" />
+                    <span class="font-semibold text-gray-900 dark:text-gray-100">当前分组</span>
+                  </div>
+                  <span
+                    :class="[
+                      'rounded-full px-2.5 py-0.5 text-xs font-medium',
+                      rotationStatus.current?.status?.available
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+                    ]"
+                  >
+                    {{ rotationStatus.current?.status?.available ? '可用' : '不可用' }}
+                  </span>
+                </div>
+
+                <div v-if="rotationStatus.current?.status" class="space-y-2 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">名称:</span>
+                    <span class="font-medium text-gray-900 dark:text-gray-100">
+                      {{ rotationStatus.current.status.name }}
+                    </span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">平台:</span>
+                    <span class="font-medium text-gray-900 dark:text-gray-100">
+                      {{ rotationStatus.current.status.platform }}
+                    </span>
+                  </div>
+
+                  <!-- 使用情况 -->
+                  <div v-if="rotationStatus.current.status.usage" class="mt-3 rounded-lg bg-white/60 p-3 dark:bg-gray-800/60">
+                    <div class="mb-1 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      使用情况:
+                    </div>
+                    <div class="space-y-1">
+                      <div class="flex justify-between text-xs">
+                        <span class="text-gray-600 dark:text-gray-400">费用:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100">
+                          ${{ rotationStatus.current.status.usage.totalCost.toFixed(6) }}
+                          <span v-if="rotationStatus.current.status.quota" class="text-gray-500">
+                            / ${{ rotationStatus.current.status.quota.maxCost }}
+                          </span>
+                        </span>
+                      </div>
+                      <div class="flex justify-between text-xs">
+                        <span class="text-gray-600 dark:text-gray-400">Tokens:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100">
+                          {{ formatTokenCount(rotationStatus.current.status.usage.totalTokens) }}
+                        </span>
+                      </div>
+                      <div class="flex justify-between text-xs">
+                        <span class="text-gray-600 dark:text-gray-400">请求数:</span>
+                        <span class="font-medium text-gray-900 dark:text-gray-100">
+                          {{ rotationStatus.current.status.usage.requestCount }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- 进度条 -->
+                    <div v-if="rotationStatus.current.status.quota?.maxCost > 0" class="mt-2">
+                      <div class="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                        <div
+                          :style="{
+                            width: Math.min((rotationStatus.current.status.usage.totalCost / rotationStatus.current.status.quota.maxCost) * 100, 100) + '%'
+                          }"
+                          class="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all"
+                        />
+                      </div>
+                      <div class="mt-1 text-right text-xs text-gray-500">
+                        {{ ((rotationStatus.current.status.usage.totalCost / rotationStatus.current.status.quota.maxCost) * 100).toFixed(1) }}%
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 冷却状态 -->
+                  <div v-if="rotationStatus.current.status.inCooldown" class="mt-3 rounded-lg bg-yellow-100 p-2 dark:bg-yellow-900/30">
+                    <div class="flex items-center text-xs text-yellow-800 dark:text-yellow-300">
+                      <i class="fas fa-snowflake mr-1" />
+                      <span>冷却中 - {{ formatCooldownTime(rotationStatus.current.status.cooldownUntil) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 下一个分组 -->
+              <div class="rounded-lg border-2 border-purple-300 bg-purple-50/50 p-4 dark:border-purple-600 dark:bg-purple-900/20">
+                <div class="mb-2 flex items-center justify-between">
+                  <div class="flex items-center">
+                    <i class="fas fa-forward mr-2 text-purple-500" />
+                    <span class="font-semibold text-gray-900 dark:text-gray-100">下一个分组</span>
+                  </div>
+                  <span
+                    :class="[
+                      'rounded-full px-2.5 py-0.5 text-xs font-medium',
+                      rotationStatus.next?.status?.available
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+                    ]"
+                  >
+                    {{ rotationStatus.next?.status?.available ? '可用' : '不可用' }}
+                  </span>
+                </div>
+
+                <div v-if="rotationStatus.next?.status" class="space-y-2 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">名称:</span>
+                    <span class="font-medium text-gray-900 dark:text-gray-100">
+                      {{ rotationStatus.next.status.name }}
+                    </span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">平台:</span>
+                    <span class="font-medium text-gray-900 dark:text-gray-100">
+                      {{ rotationStatus.next.status.platform }}
+                    </span>
+                  </div>
+
+                  <!-- 冷却状态 -->
+                  <div v-if="rotationStatus.next.status.inCooldown" class="mt-3 rounded-lg bg-yellow-100 p-2 dark:bg-yellow-900/30">
+                    <div class="flex items-center text-xs text-yellow-800 dark:text-yellow-300">
+                      <i class="fas fa-snowflake mr-1" />
+                      <span>冷却中 - {{ formatCooldownTime(rotationStatus.next.status.cooldownUntil) }}</span>
+                    </div>
+                  </div>
+
+                  <!-- 可用性提示 -->
+                  <div v-if="!rotationStatus.next.status.available && rotationStatus.next.status.unavailableReason" class="mt-3 rounded-lg bg-red-100 p-2 dark:bg-red-900/30">
+                    <div class="flex items-center text-xs text-red-800 dark:text-red-300">
+                      <i class="fas fa-exclamation-triangle mr-1" />
+                      <span>
+                        {{
+                          {
+                            cooldown: '冷却中',
+                            cost_exhausted: '费用配额耗尽',
+                            time_exhausted: '时长配额耗尽',
+                            group_not_found: '分组不存在'
+                          }[rotationStatus.next.status.unavailableReason] || rotationStatus.next.status.unavailableReason
+                        }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 底部按钮 -->
@@ -241,7 +434,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { apiClient } from '@/config/api'
 import LimitProgressBar from './LimitProgressBar.vue'
 import WindowCountdown from './WindowCountdown.vue'
 
@@ -257,6 +451,10 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close'])
+
+// 分组轮转状态
+const rotationStatus = ref(null)
+const loadingRotationStatus = ref(false)
 
 // 计算属性
 const totalRequests = computed(() => props.apiKey.usage?.total?.requests || 0)
@@ -319,6 +517,50 @@ const formatTokenCount = (count) => {
 
 const close = () => {
   emit('close')
+}
+
+// 加载分组轮转状态
+const loadRotationStatus = async () => {
+  if (!props.apiKey?.id) return
+
+  loadingRotationStatus.value = true
+  try {
+    const response = await apiClient.get(`/admin/api-keys/${props.apiKey.id}/rotation-status`)
+    rotationStatus.value = response.data.data
+  } catch (error) {
+    console.error('Failed to load rotation status:', error)
+    rotationStatus.value = null
+  } finally {
+    loadingRotationStatus.value = false
+  }
+}
+
+// 监听弹窗显示状态，加载轮转信息
+watch(
+  () => props.show,
+  (newValue) => {
+    if (newValue) {
+      loadRotationStatus()
+    }
+  }
+)
+
+// 格式化时间
+const formatCooldownTime = (isoString) => {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  const now = new Date()
+  const diff = date - now
+
+  if (diff <= 0) return '已过期'
+
+  const hours = Math.floor(diff / (1000 * 60 * 60))
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+
+  if (hours > 0) {
+    return `${hours}小时${minutes}分钟后`
+  }
+  return `${minutes}分钟后`
 }
 </script>
 
