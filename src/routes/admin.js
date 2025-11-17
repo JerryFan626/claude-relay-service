@@ -1735,12 +1735,15 @@ router.delete('/api-keys/deleted/clear-all', authenticateAdmin, async (req, res)
 // 创建账户分组
 router.post('/account-groups', authenticateAdmin, async (req, res) => {
   try {
-    const { name, platform, description } = req.body
+    const { name, platform, description, weeklyQuota, rotationConfig, priority } = req.body
 
     const group = await accountGroupService.createGroup({
       name,
       platform,
-      description
+      description,
+      weeklyQuota,
+      rotationConfig,
+      priority
     })
 
     return res.json({ success: true, data: group })

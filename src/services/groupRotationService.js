@@ -31,16 +31,12 @@ class GroupRotationService {
         return { available: false, reason: 'group_not_found' }
       }
 
-      // 如果没有配置轮转配额，直接返回可用
-      if (!group.rotationQuota || !group.rotationQuota.maxCost) {
-        return { available: true }
-      }
-
       // 3. 获取当前轮次使用统计
       const usage = await redis.getGroupRotationUsage(groupId)
-
-      // 4. 检查时间限制（如果有startTime）
       const config = group.rotationConfig
+      const quota = group.rotationQuota
+
+      // 4. 检查时间限制（独立检查，不依赖费用配置）
       if (config && config.maxHours > 0 && usage.startTime) {
         const startTime = new Date(usage.startTime)
         const now = new Date()
@@ -51,17 +47,15 @@ class GroupRotationService {
             available: false,
             reason: 'time_exhausted',
             usage,
-            quota: group.rotationQuota,
+            quota,
             elapsedHours,
             maxHours: config.maxHours
           }
         }
       }
 
-      // 5. 检查费用限制
-      const quota = group.rotationQuota
-
-      if (quota.maxCost > 0 && usage.totalCost >= quota.maxCost) {
+      // 5. 检查费用限制（独立检查，不依赖时间配置）
+      if (quota && quota.maxCost > 0 && usage.totalCost >= quota.maxCost) {
         return {
           available: false,
           reason: 'cost_exhausted',
@@ -70,6 +64,7 @@ class GroupRotationService {
         }
       }
 
+      // 6. 如果两个限制都未触发（或都未配置），返回可用
       return {
         available: true,
         usage,

@@ -102,26 +102,43 @@ class AccountGroupService {
         throw new Error('不能修改分组的平台类型')
       }
 
-      // 准备更新数据
+      // 准备更新数据(扁平化结构,兼容Redis Hash)
       const updateData = {
-        ...updates,
         updatedAt: new Date().toISOString()
       }
 
-      // 移除不允许修改的字段
-      delete updateData.id
-      delete updateData.platform
-      delete updateData.createdAt
+      // 处理基本字段
+      if (updates.name !== undefined) {
+        updateData.name = updates.name
+      }
+      if (updates.description !== undefined) {
+        updateData.description = updates.description
+      }
+      if (updates.priority !== undefined) {
+        updateData.priority = String(updates.priority)
+      }
+
+      // 处理轮转配额(嵌套对象转扁平字段)
+      if (updates.weeklyQuota) {
+        updateData.rotationQuotaMaxCost = String(updates.weeklyQuota.maxCost || 0)
+      }
+
+      // 处理轮转配置(嵌套对象转扁平字段)
+      if (updates.rotationConfig) {
+        updateData.rotationCooldownHours = String(updates.rotationConfig.cooldownHours || 12)
+        updateData.rotationMaxHours = String(updates.rotationConfig.maxHours || 5)
+      }
 
       // 更新分组
       await client.hmset(groupKey, updateData)
 
       // 返回更新后的完整数据
       const updatedGroup = await client.hgetall(groupKey)
+      const memberCount = await client.scard(`${this.GROUP_MEMBERS_PREFIX}${groupId}`)
 
       logger.success(`✅ 更新账户分组成功: ${updatedGroup.name}`)
 
-      return updatedGroup
+      return this._formatGroupData(updatedGroup, memberCount)
     } catch (error) {
       logger.error('❌ 更新账户分组失败:', error)
       throw error
