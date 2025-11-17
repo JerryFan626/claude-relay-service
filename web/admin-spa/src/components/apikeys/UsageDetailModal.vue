@@ -248,7 +248,9 @@
             <!-- 轮转状态内容 -->
             <div v-else class="space-y-4">
               <!-- 概览信息 -->
-              <div class="rounded-lg bg-gradient-to-br from-indigo-50 to-blue-50 p-4 dark:from-indigo-900/20 dark:to-blue-900/20">
+              <div
+                class="rounded-lg bg-gradient-to-br from-indigo-50 to-blue-50 p-4 dark:from-indigo-900/20 dark:to-blue-900/20"
+              >
                 <div class="grid grid-cols-3 gap-4 text-center">
                   <div>
                     <div class="text-xs text-gray-600 dark:text-gray-400">总分组数</div>
@@ -272,7 +274,9 @@
               </div>
 
               <!-- 当前分组 -->
-              <div class="rounded-lg border-2 border-blue-300 bg-blue-50/50 p-4 dark:border-blue-600 dark:bg-blue-900/20">
+              <div
+                class="rounded-lg border-2 border-blue-300 bg-blue-50/50 p-4 dark:border-blue-600 dark:bg-blue-900/20"
+              >
                 <div class="mb-2 flex items-center justify-between">
                   <div class="flex items-center">
                     <i class="fas fa-bullseye mr-2 text-blue-500" />
@@ -305,7 +309,10 @@
                   </div>
 
                   <!-- 使用情况 -->
-                  <div v-if="rotationStatus.current.status.usage" class="mt-3 rounded-lg bg-white/60 p-3 dark:bg-gray-800/60">
+                  <div
+                    v-if="rotationStatus.current.status.usage"
+                    class="mt-3 rounded-lg bg-white/60 p-3 dark:bg-gray-800/60"
+                  >
                     <div class="mb-1 text-xs font-semibold text-gray-700 dark:text-gray-300">
                       使用情况:
                     </div>
@@ -335,32 +342,54 @@
 
                     <!-- 进度条 -->
                     <div v-if="rotationStatus.current.status.quota?.maxCost > 0" class="mt-2">
-                      <div class="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                      <div
+                        class="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
+                      >
                         <div
-                          :style="{
-                            width: Math.min((rotationStatus.current.status.usage.totalCost / rotationStatus.current.status.quota.maxCost) * 100, 100) + '%'
-                          }"
                           class="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all"
+                          :style="{
+                            width:
+                              Math.min(
+                                (rotationStatus.current.status.usage.totalCost /
+                                  rotationStatus.current.status.quota.maxCost) *
+                                  100,
+                                100
+                              ) + '%'
+                          }"
                         />
                       </div>
                       <div class="mt-1 text-right text-xs text-gray-500">
-                        {{ ((rotationStatus.current.status.usage.totalCost / rotationStatus.current.status.quota.maxCost) * 100).toFixed(1) }}%
+                        {{
+                          (
+                            (rotationStatus.current.status.usage.totalCost /
+                              rotationStatus.current.status.quota.maxCost) *
+                            100
+                          ).toFixed(1)
+                        }}%
                       </div>
                     </div>
                   </div>
 
                   <!-- 冷却状态 -->
-                  <div v-if="rotationStatus.current.status.inCooldown" class="mt-3 rounded-lg bg-yellow-100 p-2 dark:bg-yellow-900/30">
+                  <div
+                    v-if="rotationStatus.current.status.inCooldown"
+                    class="mt-3 rounded-lg bg-yellow-100 p-2 dark:bg-yellow-900/30"
+                  >
                     <div class="flex items-center text-xs text-yellow-800 dark:text-yellow-300">
                       <i class="fas fa-snowflake mr-1" />
-                      <span>冷却中 - {{ formatCooldownTime(rotationStatus.current.status.cooldownUntil) }}</span>
+                      <span
+                        >冷却中 -
+                        {{ formatCooldownTime(rotationStatus.current.status.cooldownUntil) }}</span
+                      >
                     </div>
                   </div>
                 </div>
               </div>
 
               <!-- 下一个分组 -->
-              <div class="rounded-lg border-2 border-purple-300 bg-purple-50/50 p-4 dark:border-purple-600 dark:bg-purple-900/20">
+              <div
+                class="rounded-lg border-2 border-purple-300 bg-purple-50/50 p-4 dark:border-purple-600 dark:bg-purple-900/20"
+              >
                 <div class="mb-2 flex items-center justify-between">
                   <div class="flex items-center">
                     <i class="fas fa-forward mr-2 text-purple-500" />
@@ -393,15 +422,27 @@
                   </div>
 
                   <!-- 冷却状态 -->
-                  <div v-if="rotationStatus.next.status.inCooldown" class="mt-3 rounded-lg bg-yellow-100 p-2 dark:bg-yellow-900/30">
+                  <div
+                    v-if="rotationStatus.next.status.inCooldown"
+                    class="mt-3 rounded-lg bg-yellow-100 p-2 dark:bg-yellow-900/30"
+                  >
                     <div class="flex items-center text-xs text-yellow-800 dark:text-yellow-300">
                       <i class="fas fa-snowflake mr-1" />
-                      <span>冷却中 - {{ formatCooldownTime(rotationStatus.next.status.cooldownUntil) }}</span>
+                      <span
+                        >冷却中 -
+                        {{ formatCooldownTime(rotationStatus.next.status.cooldownUntil) }}</span
+                      >
                     </div>
                   </div>
 
                   <!-- 可用性提示 -->
-                  <div v-if="!rotationStatus.next.status.available && rotationStatus.next.status.unavailableReason" class="mt-3 rounded-lg bg-red-100 p-2 dark:bg-red-900/30">
+                  <div
+                    v-if="
+                      !rotationStatus.next.status.available &&
+                      rotationStatus.next.status.unavailableReason
+                    "
+                    class="mt-3 rounded-lg bg-red-100 p-2 dark:bg-red-900/30"
+                  >
                     <div class="flex items-center text-xs text-red-800 dark:text-red-300">
                       <i class="fas fa-exclamation-triangle mr-1" />
                       <span>
@@ -411,7 +452,8 @@
                             cost_exhausted: '费用配额耗尽',
                             time_exhausted: '时长配额耗尽',
                             group_not_found: '分组不存在'
-                          }[rotationStatus.next.status.unavailableReason] || rotationStatus.next.status.unavailableReason
+                          }[rotationStatus.next.status.unavailableReason] ||
+                          rotationStatus.next.status.unavailableReason
                         }}
                       </span>
                     </div>
