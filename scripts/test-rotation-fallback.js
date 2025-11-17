@@ -8,7 +8,6 @@ const path = require('path')
 require('dotenv').config({ path: path.join(__dirname, '../.env') })
 
 const redis = require('../src/models/redis')
-const logger = require('../src/utils/logger')
 const unifiedClaudeScheduler = require('../src/services/unifiedClaudeScheduler')
 const accountGroupService = require('../src/services/accountGroupService')
 

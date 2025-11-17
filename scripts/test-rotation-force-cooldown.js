@@ -44,9 +44,7 @@ async function main() {
       console.log(`\x1b[32m✅ ${group.name} 已进入冷却状态 (${cooldownHours} 小时)\x1b[0m`)
     }
 
-    console.log(
-      `\n\x1b[32m✅ 所有 ${testGroups.length} 个分组已进入冷却状态\x1b[0m`
-    )
+    console.log(`\n\x1b[32m✅ 所有 ${testGroups.length} 个分组已进入冷却状态\x1b[0m`)
     console.log('\x1b[36m可以运行测试脚本：node scripts/test-rotation-fallback.js\x1b[0m\n')
   } catch (error) {
     console.error('\x1b[31m❌ 失败:\x1b[0m', error)
