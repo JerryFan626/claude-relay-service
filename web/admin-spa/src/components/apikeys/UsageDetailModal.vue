@@ -461,6 +461,53 @@
                 </div>
               </div>
             </div>
+
+            <!-- 轮转管理操作按钮 -->
+            <div
+              class="mt-4 flex flex-wrap gap-2 border-t border-gray-200 pt-4 dark:border-gray-700"
+            >
+              <button
+                class="flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-700"
+                type="button"
+                :disabled="rotationOperationLoading || !rotationStatus.next?.status?.available"
+                @click="handleManualSwitch"
+              >
+                <i
+                  :class="[
+                    'fas',
+                    rotationOperationLoading ? 'fa-spinner fa-spin' : 'fa-forward',
+                    'text-xs'
+                  ]"
+                />
+                <span>手动切换到下一个分组</span>
+              </button>
+
+              <button
+                v-if="rotationStatus.current?.status"
+                class="flex items-center gap-2 rounded-lg bg-green-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-green-600 dark:hover:bg-green-700"
+                type="button"
+                :disabled="rotationOperationLoading"
+                @click="handleResetGroup"
+              >
+                <i
+                  :class="[
+                    'fas',
+                    rotationOperationLoading ? 'fa-spinner fa-spin' : 'fa-redo',
+                    'text-xs'
+                  ]"
+                />
+                <span>重置当前分组</span>
+              </button>
+
+              <button
+                class="flex items-center gap-2 rounded-lg bg-purple-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700"
+                type="button"
+                @click="handleEditRotation"
+              >
+                <i class="fas fa-cog text-xs" />
+                <span>编辑轮转配置</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -492,11 +539,12 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'refresh', 'edit-rotation'])
 
 // 分组轮转状态
 const rotationStatus = ref(null)
 const loadingRotationStatus = ref(false)
+const rotationOperationLoading = ref(false)
 
 // 计算属性
 const totalRequests = computed(() => props.apiKey.usage?.total?.requests || 0)
@@ -575,6 +623,83 @@ const loadRotationStatus = async () => {
   } finally {
     loadingRotationStatus.value = false
   }
+}
+
+// 手动切换到下一个分组
+const handleManualSwitch = async () => {
+  if (!rotationStatus.value?.next?.groupId) {
+    showToast('没有可切换的下一个分组', 'warning')
+    return
+  }
+
+  rotationOperationLoading.value = true
+  try {
+    // 更新API Key的currentIndex
+    const nextIndex = rotationStatus.value.nextIndex
+    const result = await apiClient.put(`/admin/api-keys/${props.apiKey.id}`, {
+      groupRotation: {
+        ...props.apiKey.groupRotation,
+        currentIndex: nextIndex
+      }
+    })
+
+    if (result.success) {
+      showToast('已切换到下一个分组', 'success')
+      // 重新加载轮转状态
+      await loadRotationStatus()
+      // 通知父组件刷新
+      emit('refresh')
+    } else {
+      showToast(result.message || '切换失败', 'error')
+    }
+  } catch (error) {
+    showToast('切换失败', 'error')
+  } finally {
+    rotationOperationLoading.value = false
+  }
+}
+
+// 重置当前分组（清除使用统计和冷却期）
+const handleResetGroup = async () => {
+  if (!rotationStatus.value?.current?.groupId) {
+    showToast('当前没有可重置的分组', 'warning')
+    return
+  }
+
+  const confirmed = await window.showConfirm(
+    '重置分组',
+    `确定要重置分组 "${rotationStatus.value.current.status?.name}" 吗？这将清除该分组的使用统计和冷却状态。`,
+    '确定',
+    '取消'
+  )
+
+  if (!confirmed) return
+
+  rotationOperationLoading.value = true
+  try {
+    const result = await apiClient.post(
+      `/admin/account-groups/${rotationStatus.value.current.groupId}/reset`
+    )
+
+    if (result.success) {
+      showToast('分组已重置', 'success')
+      await loadRotationStatus()
+      emit('refresh')
+    } else {
+      showToast(result.message || '重置失败', 'error')
+    }
+  } catch (error) {
+    showToast('重置失败', 'error')
+  } finally {
+    rotationOperationLoading.value = false
+  }
+}
+
+// 编辑轮转配置（打开编辑弹窗）
+const handleEditRotation = () => {
+  // 关闭当前弹窗，让父组件打开编辑弹窗
+  emit('edit-rotation')
+  emit('close')
 }
 
 // 监听弹窗显示状态，加载轮转信息

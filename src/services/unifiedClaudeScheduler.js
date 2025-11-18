@@ -202,8 +202,12 @@ class UnifiedClaudeScheduler {
         }
       }
 
+      // ⚠️ 如果启用了分组轮转,则跳过专属账户绑定检查(分组轮转优先级最高)
+      // 仅在未启用分组轮转或降级模式时才检查专属账户绑定
+      const shouldCheckDedicatedBinding = !(apiKeyData.groupRotation && apiKeyData.groupRotation.enabled && !useFallbackMode)
+
       // 如果API Key绑定了专属账户或分组，优先使用
-      if (apiKeyData.claudeAccountId) {
+      if (shouldCheckDedicatedBinding && apiKeyData.claudeAccountId) {
         // 检查是否是分组
         if (apiKeyData.claudeAccountId.startsWith('group:')) {
           const groupId = apiKeyData.claudeAccountId.replace('group:', '')
@@ -255,7 +259,7 @@ class UnifiedClaudeScheduler {
       }
 
       // 2. 检查Claude Console账户绑定
-      if (apiKeyData.claudeConsoleAccountId) {
+      if (shouldCheckDedicatedBinding && apiKeyData.claudeConsoleAccountId) {
         const boundConsoleAccount = await claudeConsoleAccountService.getAccount(
           apiKeyData.claudeConsoleAccountId
         )
@@ -280,7 +284,7 @@ class UnifiedClaudeScheduler {
       }
 
       // 3. 检查Bedrock账户绑定
-      if (apiKeyData.bedrockAccountId) {
+      if (shouldCheckDedicatedBinding && apiKeyData.bedrockAccountId) {
         const boundBedrockAccountResult = await bedrockAccountService.getAccount(
           apiKeyData.bedrockAccountId
         )

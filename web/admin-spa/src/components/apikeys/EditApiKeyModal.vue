@@ -563,6 +563,85 @@
             </p>
           </div>
 
+          <!-- 分组轮转配置 -->
+          <div
+            class="rounded-lg border-2 border-dashed border-purple-300 bg-purple-50/30 p-4 dark:border-purple-700 dark:bg-purple-900/10"
+          >
+            <div class="mb-3 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <input
+                  id="editEnableGroupRotation"
+                  v-model="form.groupRotationEnabled"
+                  class="h-4 w-4 rounded border-gray-300 bg-gray-100 text-purple-600 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700"
+                  type="checkbox"
+                  @change="handleGroupRotationToggle"
+                />
+                <label
+                  class="cursor-pointer text-sm font-semibold text-gray-700 dark:text-gray-300"
+                  for="editEnableGroupRotation"
+                >
+                  <i class="fas fa-sync-alt mr-1 text-purple-500" />
+                  启用分组轮转
+                </label>
+              </div>
+              <span
+                v-if="form.groupRotationEnabled"
+                class="rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+              >
+                已启用
+              </span>
+            </div>
+
+            <div v-if="form.groupRotationEnabled" class="space-y-3">
+              <!-- 分组选择器 -->
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-600 dark:text-gray-400">
+                  选择轮转分组（至少2个）
+                </label>
+                <RotationGroupSelector
+                  v-model="form.selectedRotationGroups"
+                  :groups="allAccountGroups"
+                  :platform="getRotationPlatform()"
+                />
+              </div>
+
+              <!-- 当前分组索引 -->
+              <div v-if="form.selectedRotationGroups.length > 0">
+                <label class="mb-2 block text-sm font-medium text-gray-600 dark:text-gray-400">
+                  当前使用的分组
+                </label>
+                <select
+                  v-model="form.currentRotationIndex"
+                  class="form-input w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                >
+                  <option
+                    v-for="(groupId, index) in form.selectedRotationGroups"
+                    :key="groupId"
+                    :value="index"
+                  >
+                    {{ index + 1 }}. {{ getGroupName(groupId) }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <p
+              v-if="!form.groupRotationEnabled"
+              class="mt-2 text-xs text-gray-500 dark:text-gray-400"
+            >
+              <i class="fas fa-info-circle mr-1" />
+              分组轮转可在多个账户组之间自动切换，避免单个分组过载。启用后将忽略专属账号绑定。
+            </p>
+
+            <div
+              v-if="form.groupRotationEnabled && form.selectedRotationGroups.length < 2"
+              class="mt-2 rounded border border-orange-200 bg-orange-50 p-2 text-xs text-orange-700 dark:border-orange-700 dark:bg-orange-900/20 dark:text-orange-300"
+            >
+              <i class="fas fa-exclamation-triangle mr-1" />
+              至少需要选择 2 个分组才能启用轮转功能
+            </div>
+          </div>
+
           <div>
             <div class="mb-3 flex items-center">
               <input
@@ -732,6 +811,7 @@ import { useClientsStore } from '@/stores/clients'
 import { useApiKeysStore } from '@/stores/apiKeys'
 import { apiClient } from '@/config/api'
 import AccountSelector from '@/components/common/AccountSelector.vue'
+import RotationGroupSelector from '@/components/common/RotationGroupSelector.vue'
 
 const props = defineProps({
   apiKey: {
@@ -813,7 +893,11 @@ const form = reactive({
   allowedClients: [],
   tags: [],
   isActive: true,
-  ownerId: '' // 新增：所有者ID
+  ownerId: '', // 新增：所有者ID
+  // 分组轮转配置
+  groupRotationEnabled: false,
+  selectedRotationGroups: [],
+  currentRotationIndex: 0
 })
 
 // 添加限制的模型
@@ -989,6 +1073,26 @@ const updateApiKey = async () => {
       data.ownerId = form.ownerId
     }
 
+    // 分组轮转配置
+    if (form.groupRotationEnabled && form.selectedRotationGroups.length >= 2) {
+      // 构建轮转配置对象
+      data.groupRotation = {
+        enabled: true,
+        currentIndex: form.currentRotationIndex,
+        groups: form.selectedRotationGroups.map((groupId) => {
+          const group = allAccountGroups.value.find((g) => g.id === groupId)
+          return {
+            groupId: groupId,
+            name: group ? group.name : groupId,
+            platform: group ? group.platform : 'claude'
+          }
+        })
+      }
+    } else {
+      // 禁用或不满足条件时清空轮转配置
+      data.groupRotation = null
+    }
+
     const result = await apiClient.put(`/admin/api-keys/${props.apiKey.id}`, data)
 
     if (result.success) {
@@ -1001,6 +1105,50 @@ const updateApiKey = async () => {
     showToast('更新失败', 'error')
   } finally {
     loading.value = false
+  }
+}
+
+// === 分组轮转相关函数 ===
+
+// 所有账户分组（合并所有平台的分组）
+const allAccountGroups = computed(() => {
+  return [
+    ...localAccounts.value.claudeGroups,
+    ...localAccounts.value.geminiGroups,
+    ...localAccounts.value.openaiGroups,
+    ...localAccounts.value.droidGroups
+  ]
+})
+
+// 获取轮转的平台类型
+const getRotationPlatform = () => {
+  // 根据permissions确定平台
+  if (form.permissions === 'claude') return 'claude'
+  if (form.permissions === 'gemini') return 'gemini'
+  if (form.permissions === 'openai') return 'openai'
+  if (form.permissions === 'droid') return 'droid'
+  return null // all permissions不限制平台
+}
+
+// 获取分组名称
+const getGroupName = (groupId) => {
+  const group = allAccountGroups.value.find((g) => g.id === groupId)
+  return group ? group.name : groupId
+}
+
+// 处理轮转启用/禁用
+const handleGroupRotationToggle = () => {
+  if (form.groupRotationEnabled) {
+    // 启用轮转时，清空专属账户绑定
+    form.claudeAccountId = ''
+    form.geminiAccountId = ''
+    form.openaiAccountId = ''
+    form.bedrockAccountId = ''
+    form.droidAccountId = ''
+  } else {
+    // 禁用轮转时，清空轮转配置
+    form.selectedRotationGroups = []
+    form.currentRotationIndex = 0
   }
 }
 
@@ -1240,6 +1388,16 @@ onMounted(async () => {
 
   // 初始化所有者
   form.ownerId = props.apiKey.userId || 'admin'
+
+  // 初始化分组轮转配置
+  if (props.apiKey.groupRotation && props.apiKey.groupRotation.enabled) {
+    form.groupRotationEnabled = true
+    form.currentRotationIndex = props.apiKey.groupRotation.currentIndex || 0
+    // 提取分组ID列表
+    if (props.apiKey.groupRotation.groups && Array.isArray(props.apiKey.groupRotation.groups)) {
+      form.selectedRotationGroups = props.apiKey.groupRotation.groups.map((g) => g.groupId)
+    }
+  }
 })
 </script>
 

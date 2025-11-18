@@ -620,7 +620,8 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       activationDays, // 新增：激活后有效天数
       activationUnit, // 新增：激活时间单位 (hours/days)
       expirationMode, // 新增：过期模式
-      icon // 新增：图标
+      icon, // 新增：图标
+      groupRotation // 新增：分组轮转配置
     } = req.body
 
     // 输入验证
@@ -753,6 +754,19 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       })
     }
 
+    // 验证分组轮转配置
+    if (groupRotation !== undefined && groupRotation !== null) {
+      if (typeof groupRotation !== 'object') {
+        return res.status(400).json({ error: 'groupRotation must be an object' })
+      }
+      if (groupRotation.enabled !== undefined && typeof groupRotation.enabled !== 'boolean') {
+        return res.status(400).json({ error: 'groupRotation.enabled must be a boolean' })
+      }
+      if (groupRotation.groups !== undefined && !Array.isArray(groupRotation.groups)) {
+        return res.status(400).json({ error: 'groupRotation.groups must be an array' })
+      }
+    }
+
     const newKey = await apiKeyService.generateApiKey({
       name,
       description,
@@ -780,7 +794,8 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       activationDays,
       activationUnit,
       expirationMode,
-      icon
+      icon,
+      groupRotation
     })
 
     logger.success(`🔑 Admin created new API key: ${name}`)
@@ -1145,7 +1160,8 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
       totalCostLimit,
       weeklyOpusCostLimit,
       tags,
-      ownerId // 新增：所有者ID字段
+      ownerId, // 新增：所有者ID字段
+      groupRotation // 新增：分组轮转配置
     } = req.body
 
     // 只允许更新指定字段
@@ -1330,6 +1346,25 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
         return res.status(400).json({ error: 'All tags must be non-empty strings' })
       }
       updates.tags = tags
+    }
+
+    // 处理分组轮转配置
+    if (groupRotation !== undefined) {
+      if (groupRotation === null) {
+        // null 表示清空分组轮转配置
+        updates.groupRotation = null
+      } else if (typeof groupRotation === 'object') {
+        // 验证分组轮转配置
+        if (groupRotation.enabled !== undefined && typeof groupRotation.enabled !== 'boolean') {
+          return res.status(400).json({ error: 'groupRotation.enabled must be a boolean' })
+        }
+        if (groupRotation.groups !== undefined && !Array.isArray(groupRotation.groups)) {
+          return res.status(400).json({ error: 'groupRotation.groups must be an array' })
+        }
+        updates.groupRotation = groupRotation
+      } else {
+        return res.status(400).json({ error: 'groupRotation must be an object or null' })
+      }
     }
 
     // 处理活跃/禁用状态状态, 放在过期处理后，以确保后续增加禁用key功能
